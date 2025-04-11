@@ -1,0 +1,23 @@
+{
+    "weather-server": {
+      "command": "node",
+      "args": ["./servers/weather-mcp-server/build/index.js"],
+      "disabled": false,
+      "autoApprove": []
+    },
+    "docent": {
+      "command": "node",
+      "args": [
+        "./servers/mcp-docent-server/dist/index.js"
+      ],
+      "disabled": false
+    },
+    "youtube-music": {
+      "command": "node",
+      "args": [
+        "./servers/mcp-youtube-music-server/dist/index.js"
+      ],
+      "disabled": false
+    }
+  }
+  

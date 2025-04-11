@@ -1,0 +1,19 @@
+{
+    "weather-server": {
+      "command": "node",
+      "args": ["./servers/weather-mcp-server/build/index.js"],
+      "env": {
+        "OPENWEATHER_API_KEY": "189c702d1350eea4008b5fca87960502"
+      },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "docent": {
+      "command": "node",
+      "args": [
+        "./servers/mcp-docent-server/dist/index.js"
+      ],
+      "disabled": false
+    }
+  }
+  
