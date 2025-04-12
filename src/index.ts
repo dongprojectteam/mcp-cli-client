@@ -1,4 +1,3 @@
-// mcp-orchestrator-client.ts
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
@@ -12,9 +11,6 @@ import { Claude } from "./llm/anthropic.js"
 
 config();
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set");
-
 type MCPServer = {
   name: string;
   client: Client;
@@ -23,7 +19,6 @@ type MCPServer = {
 };
 
 class MCPOrchestrator {
-  // private llm: OpenAI;
   private llm: LLM
   private systemPrompt: string;
   private servers = new Map<string, MCPServer>();
@@ -56,7 +51,7 @@ class MCPOrchestrator {
     this.servers.set(name, { name, client, transport, functions });
     this.allFunctions.push(...functions);
 
-    console.log(`\u2705 Registered MCP Server '${name}' with tools: ${toolsResult.tools.map(t => t.name).join(", ")}`);
+    console.log(`✨ Registered MCP Server '${name}' with tools: ${toolsResult.tools.map(t => t.name).join(", ")}`);
   }
 
   async processQuery(query: string): Promise<string> {
@@ -127,7 +122,7 @@ async function registerServersFromConfig(orchestrator: MCPOrchestrator, configPa
     orchestrator["servers"].set(name, { name, client, transport, functions });
     orchestrator["allFunctions"].push(...functions);
 
-    console.log(`✅ Registered MCP server '${name}' from config with tools: ${toolsResult.tools.map(t => t.name).join(", ")}`);
+    console.log(`✨ Registered MCP server '${name}' from config with tools: ${toolsResult.tools.map(t => t.name).join(", ")}`);
   }
 }
 
