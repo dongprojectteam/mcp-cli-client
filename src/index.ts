@@ -6,9 +6,9 @@ import { config } from "dotenv";
 import { createInterface } from "readline/promises";
 import { OpenAI } from "openai";
 
-import { LLM } from "./src/llm/llm";
-import { Claude } from "./src/llm/anthropic"
-import { GPT } from "./src/llm/gpt"
+import { LLM } from "./llm/llm.js";
+import { GPT } from "./llm/gpt.js"
+import { Claude } from "./llm/anthropic.js"
 
 config();
 
