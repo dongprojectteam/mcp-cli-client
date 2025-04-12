@@ -6,6 +6,10 @@ import { config } from "dotenv";
 import { createInterface } from "readline/promises";
 import { OpenAI } from "openai";
 
+import { LLM } from "./llm/llm.js";
+import { GPT } from "./llm/gpt.js"
+import { Claude } from "./llm/anthropic.js"
+
 config();
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -18,16 +22,16 @@ type MCPServer = {
   functions: OpenAI.ChatCompletionTool[];
 };
 
-const SYSTEM_PROMPT = "You are Bixby, a helpful and knowledgeable AI agent that coordinates multiple MCP servers. If someone asks who you are, say: 'I am Bixby agent.'";
-
-
 class MCPOrchestrator {
-  private llm: OpenAI;
+  // private llm: OpenAI;
+  private llm: LLM
+  private systemPrompt: string;
   private servers = new Map<string, MCPServer>();
   private allFunctions: OpenAI.ChatCompletionTool[] = [];
 
-  constructor(apiKey: string) {
-    this.llm = new OpenAI({ apiKey });
+  constructor(llm: LLM, systemPrompt: string) {
+    this.llm = llm;
+    this.systemPrompt = systemPrompt;
   }
 
   async registerServer(name: string, scriptPath: string) {
@@ -57,17 +61,11 @@ class MCPOrchestrator {
 
   async processQuery(query: string): Promise<string> {
     const messages: OpenAI.ChatCompletionMessageParam[] = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: this.systemPrompt },
       { role: "user", content: query },
     ];
 
-    const result = await this.llm.chat.completions.create({
-      model: "gpt-4-1106-preview",
-      messages,
-      tools: this.allFunctions,
-      tool_choice: "auto",
-    });
-
+    const result = await this.llm.chat(messages, this.allFunctions, "auto");
     const response = result.choices[0].message;
     if (!response.tool_calls?.length) return response.content ?? "";
 
@@ -75,18 +73,14 @@ class MCPOrchestrator {
       const toolMeta = this.allFunctions.find(f => f.function.name === toolCall.function.name);
       if (!toolMeta) throw new Error(`Unknown tool name: ${toolCall.function.name}`);
 
-      const toolIdParts = toolMeta.function.name.split("_");
-      const serverName = toolIdParts[0];
-      const server: MCPServer | undefined = this.servers.get(serverName);
+      const serverName = toolMeta.function.name.split("_")[0];
+      const server = this.servers.get(serverName);
       if (!server) throw new Error(`Unknown server: ${serverName}`);
 
       const toolName = toolMeta.function.name.replace(`${serverName}_`, "");
       const args = JSON.parse(toolCall.function.arguments);
 
-      const toolResult = await server.client.callTool({
-        name: toolName,
-        arguments: args,
-      });
+      const toolResult = await server.client.callTool({ name: toolName, arguments: args });
 
       const content = typeof toolResult.content === "string"
         ? toolResult.content
@@ -98,11 +92,7 @@ class MCPOrchestrator {
       );
     }
 
-    const final = await this.llm.chat.completions.create({
-      model: "gpt-4-1106-preview",
-      messages,
-    });
-
+    const final = await this.llm.chat(messages);
     return final.choices[0].message?.content ?? "";
   }
 
@@ -141,26 +131,51 @@ async function registerServersFromConfig(orchestrator: MCPOrchestrator, configPa
   }
 }
 
+async function loadConfig(): Promise<{ llm: LLM; systemPrompt: string, serverConfig: string }> {
+  const configPath = "./mcp.llm.json";
+  const content = await fs.readFile(configPath, "utf-8");
+  const { llm: model, systemPrompt, serverConfig } = JSON.parse(content);
+
+  let llm: LLM;
+  if (model === "claude") {
+    const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
+    if (!CLAUDE_API_KEY) throw new Error("CLAUDE_API_KEY is not set");
+    llm = new Claude(CLAUDE_API_KEY);
+  } else if (model === "gpt") {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not set");
+    llm = new GPT(OPENAI_API_KEY);
+  } else {
+    throw new Error(`Unsupported LLM type: '${model}'. Use 'gpt' or 'claude' in mcp.llm.json`);
+  }
+
+  if (typeof systemPrompt !== "string" || !systemPrompt.trim()) {
+    throw new Error("Missing or invalid 'systemPrompt' in mcp.llm.json");
+  }
+
+  if (typeof serverConfig !== "string" || !serverConfig.trim()) {
+    throw new Error("Missing or invalid 'serverConfig' in mcp.llm.json");
+  }
+
+  return { llm, systemPrompt, serverConfig };
+}
+
 async function main() {
-  const orchestrator = new MCPOrchestrator(OPENAI_API_KEY as string);
-  await registerServersFromConfig(orchestrator, "./mcp.servers.json");
+  const { llm, systemPrompt, serverConfig } = await loadConfig();
+  const orchestrator = new MCPOrchestrator(llm, systemPrompt);
+  await registerServersFromConfig(orchestrator, serverConfig);
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
   try {
-    console.log("\nMCP Orchestrator Client Started!");
+    console.log("\nMCP Orchestrator Client Started! (LLM loaded from mcp.llm.json)");
     console.log("Type your queries or 'quit' to exit.");
 
     while (true) {
-      try {
-        const message = await rl.question("\nQuery: ");
-        if (message.toLowerCase() === "quit") break;
-
-        const response = await orchestrator.processQuery(message);
-        console.log("\n" + response);
-      } catch (err) {
-        console.error("❌ Error:", err);
-      }
+      const message = await rl.question("\nQuery: ");
+      if (message.toLowerCase() === "quit") break;
+      const response = await orchestrator.processQuery(message);
+      console.log("\n" + response);
     }
   } finally {
     rl.close();
@@ -169,4 +184,4 @@ async function main() {
   }
 }
 
-main();
+main()
